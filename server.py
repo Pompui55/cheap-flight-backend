@@ -60,7 +60,160 @@ class UserResponse(BaseModel):
     email: str
     name: str
     created_at: str
+Ajoutons les Favoris et Alertes au Backend
+Étape 1 : Ouvrez server.py avec nano
+nano ~/Cheap-flight/backend/server.py
+Étape 2 : Trouvez la section # ============= AUTH MODELS =============
+Juste APRÈS les modèles d'authentification (après class UserResponse), ajoutez ce code :
 
+# ============= FAVORITES MODELS =============
+class FavoriteCreate(BaseModel):
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+
+class FavoriteResponse(BaseModel):
+    favorite_id: str
+    user_id: str
+    origin: str
+    destination: str
+    origin_city: str
+    destination_city: str
+    created_at: str
+
+# ============= ALERTS MODELS =============
+class AlertCreate(BaseModel):
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+    target_price: float
+
+class AlertResponse(BaseModel):
+    alert_id: str
+    user_id: str
+    origin: str
+    destination: str
+    origin_city: str
+    destination_city: str
+    target_price: float
+    is_active: bool
+    created_at: str
+Étape 3 : Trouvez la fin du fichier (avant app.add_middleware)
+Ajoutez ces nouveaux endpoints AVANT la ligne app.add_middleware( :
+
+# ============= FAVORITES ROUTES =============
+
+@api_router.get("/favorites")
+async def get_favorites(current_user: dict = Depends(get_current_user)):
+    favorites = await db.favorites.find({"user_id": current_user["user_id"]}).to_list(100)
+    return [{
+        "favorite_id": f["favorite_id"],
+        "user_id": f["user_id"],
+        "origin": f["origin"],
+        "destination": f["destination"],
+        "origin_city": f.get("origin_city", f["origin"]),
+        "destination_city": f.get("destination_city", f["destination"]),
+        "created_at": f["created_at"]
+    } for f in favorites]
+
+@api_router.post("/favorites")
+async def add_favorite(favorite: FavoriteCreate, current_user: dict = Depends(get_current_user)):
+    # Check if already exists
+    existing = await db.favorites.find_one({
+        "user_id": current_user["user_id"],
+        "origin": favorite.origin.upper(),
+        "destination": favorite.destination.upper()
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Favorite already exists")
+    
+    favorite_id = str(uuid.uuid4())
+    fav = {
+        "favorite_id": favorite_id,
+        "user_id": current_user["user_id"],
+        "origin": favorite.origin.upper(),
+        "destination": favorite.destination.upper(),
+        "origin_city": favorite.origin_city or favorite.origin.upper(),
+        "destination_city": favorite.destination_city or favorite.destination.upper(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.favorites.insert_one(fav)
+    return {"favorite_id": favorite_id, "message": "Favorite added"}
+
+@api_router.delete("/favorites/{favorite_id}")
+async def delete_favorite(favorite_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.favorites.delete_one({
+        "favorite_id": favorite_id,
+        "user_id": current_user["user_id"]
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    return {"message": "Favorite deleted"}
+
+# ============= ALERTS ROUTES =============
+
+@api_router.get("/alerts")
+async def get_alerts(current_user: dict = Depends(get_current_user)):
+    alerts = await db.alerts.find({"user_id": current_user["user_id"]}).to_list(100)
+    return [{
+        "alert_id": a["alert_id"],
+        "user_id": a["user_id"],
+        "origin": a["origin"],
+        "destination": a["destination"],
+        "origin_city": a.get("origin_city", a["origin"]),
+        "destination_city": a.get("destination_city", a["destination"]),
+        "target_price": a["target_price"],
+        "is_active": a.get("is_active", True),
+        "created_at": a["created_at"]
+    } for a in alerts]
+
+@api_router.post("/alerts")
+async def create_alert(alert: AlertCreate, current_user: dict = Depends(get_current_user)):
+    alert_id = str(uuid.uuid4())
+    alert_doc = {
+        "alert_id": alert_id,
+        "user_id": current_user["user_id"],
+        "origin": alert.origin.upper(),
+        "destination": alert.destination.upper(),
+        "origin_city": alert.origin_city or alert.origin.upper(),
+        "destination_city": alert.destination_city or alert.destination.upper(),
+        "target_price": alert.target_price,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.alerts.insert_one(alert_doc)
+    return {"alert_id": alert_id, "message": "Alert created"}
+
+@api_router.delete("/alerts/{alert_id}")
+async def delete_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.alerts.delete_one({
+        "alert_id": alert_id,
+        "user_id": current_user["user_id"]
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"message": "Alert deleted"}
+
+@api_router.patch("/alerts/{alert_id}/toggle")
+async def toggle_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
+    alert = await db.alerts.find_one({
+        "alert_id": alert_id,
+        "user_id": current_user["user_id"]
+    })
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    new_status = not alert.get("is_active", True)
+    await db.alerts.update_one(
+        {"alert_id": alert_id},
+        {"$set": {"is_active": new_status}}
+    )
+    return {"is_active": new_status, "message": f"Alert {'activated' if new_status else 'deactivated'}"}
+Étape 4 : Sauvegardez et quittez nano
+Ctrl+O → Enter (sauvegarder)
+Ctrl+X (quitter)
 # ============= AUTH HELPERS =============
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
