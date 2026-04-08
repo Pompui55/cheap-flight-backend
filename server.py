@@ -394,10 +394,7 @@ def generate_mock_flights(origin: str, destination: str, flight_date: str, count
         hour = random.randint(6, 22)
         minute = random.choice([0, 15, 30, 45])
         
-        if origin.upper()[:1] == destination.upper()[:1]:
-            duration_hours = random.randint(1, 3)
-        else:
-            duration_hours = random.randint(4, 12)
+        duration_hours = random.randint(8, 14) if len(origin) == 3 and len(destination) == 3 else random.randint(2, 5)
         duration_mins = random.choice([0, 15, 30, 45])
         
         arr_hour = (hour + duration_hours) % 24
