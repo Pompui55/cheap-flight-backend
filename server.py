@@ -290,7 +290,8 @@ class AlertCreate(BaseModel):
     destination_city: str = ""
     target_price: float
 
-\n# ============= API ROUTES =============
+
+# ============= API ROUTES =============
 
 @api_router.get("/")
 async def root():
@@ -452,7 +453,8 @@ async def delete_alert(alert_id: str, current_user: dict = Depends(get_current_u
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"message": "Deleted"}
-\napp.include_router(api_router)
+
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
