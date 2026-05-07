@@ -275,7 +275,22 @@ def generate_mock_flights(origin: str, destination: str, flight_date: str, count
     flights.sort(key=lambda x: x["price"])
     return flights
 
-# ============= API ROUTES =============
+# ============= FAVORITES MODEL =============
+class FavoriteCreate(BaseModel):
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+
+# ============= ALERTS MODEL =============
+class AlertCreate(BaseModel):
+    origin: str
+    destination: str
+    origin_city: str = ""
+    destination_city: str = ""
+    target_price: float
+
+\n# ============= API ROUTES =============
 
 @api_router.get("/")
 async def root():
@@ -383,7 +398,61 @@ async def get_popular():
         {"origin": "CDG", "destination": "DXB", "city": "Dubai", "country": "UAE", "price_from": 350},
     ]
 
-app.include_router(api_router)
+# ============= FAVORITES ROUTES =============
+
+@api_router.get("/favorites")
+async def get_favorites(current_user: dict = Depends(get_current_user)):
+    favorites = await db.favorites.find({"user_id": current_user["user_id"]}).to_list(100)
+    for f in favorites:
+        f.pop("_id", None)
+    return favorites
+
+@api_router.post("/favorites")
+async def add_favorite(fav: FavoriteCreate, current_user: dict = Depends(get_current_user)):
+    existing = await db.favorites.find_one({"user_id": current_user["user_id"], "origin": fav.origin.upper(), "destination": fav.destination.upper()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already in favorites")
+    favorite = {"favorite_id": str(uuid.uuid4()), "user_id": current_user["user_id"], "origin": fav.origin.upper(), "destination": fav.destination.upper(), "origin_city": fav.origin_city, "destination_city": fav.destination_city, "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.favorites.insert_one(favorite)
+    favorite.pop("_id", None)
+    return favorite
+
+@api_router.delete("/favorites/{favorite_id}")
+async def delete_favorite(favorite_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.favorites.delete_one({"favorite_id": favorite_id, "user_id": current_user["user_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    return {"message": "Deleted"}
+
+@api_router.get("/alerts")
+async def get_alerts(current_user: dict = Depends(get_current_user)):
+    alerts = await db.alerts.find({"user_id": current_user["user_id"]}).to_list(100)
+    for a in alerts:
+        a.pop("_id", None)
+    return alerts
+
+@api_router.post("/alerts")
+async def create_alert(alert: AlertCreate, current_user: dict = Depends(get_current_user)):
+    alert_doc = {"alert_id": str(uuid.uuid4()), "user_id": current_user["user_id"], "origin": alert.origin.upper(), "destination": alert.destination.upper(), "origin_city": alert.origin_city, "destination_city": alert.destination_city, "target_price": alert.target_price, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.alerts.insert_one(alert_doc)
+    alert_doc.pop("_id", None)
+    return alert_doc
+
+@api_router.put("/alerts/{alert_id}")
+async def toggle_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
+    alert = await db.alerts.find_one({"alert_id": alert_id, "user_id": current_user["user_id"]})
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    await db.alerts.update_one({"alert_id": alert_id}, {"$set": {"is_active": not alert.get("is_active", True)}})
+    return {"alert_id": alert_id, "is_active": not alert.get("is_active", True)}
+
+@api_router.delete("/alerts/{alert_id}")
+async def delete_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.alerts.delete_one({"alert_id": alert_id, "user_id": current_user["user_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"message": "Deleted"}
+\napp.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
