@@ -387,14 +387,14 @@ def generate_mock_flights(origin: str, destination: str, flight_date: str, count
         ("CDG", "BCN"): 85, ("CDG", "LHR"): 95, ("PAR", "LON"): 95,
         ("CDG", "FCO"): 110, ("CDG", "CMN"): 120,
     }
-    base_price = base_prices.get((origin.upper(), destination.upper()), random.randint(150, 600))
+    base_price = base_prices.get((origin.upper(), destination.upper()), random.randint(400, 800))
     
     for i in range(count):
         airline = random.choice(AIRLINES)
         hour = random.randint(6, 22)
         minute = random.choice([0, 15, 30, 45])
         
-        duration_hours = random.randint(8, 14) if len(origin) == 3 and len(destination) == 3 else random.randint(2, 5)
+        duration_hours = random.randint(11, 14) if len(origin) == 3 and len(destination) == 3 else random.randint(2, 5)
         duration_mins = random.choice([0, 15, 30, 45])
         
         arr_hour = (hour + duration_hours) % 24
